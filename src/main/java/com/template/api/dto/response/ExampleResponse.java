@@ -1,29 +1,14 @@
 package com.template.api.dto.response;
 
-/**
- * What gets sent back to the API consumer.
- * Only expose fields the client needs — never your full internal model.
- */
-public class ExampleResponse {
+import io.swagger.v3.oas.annotations.media.Schema;
 
-    private Long id;
-    private String name;
-    private String email;
+import java.time.Instant;
 
-    public ExampleResponse() {}
-
-    public ExampleResponse(Long id, String name, String email) {
-        this.id = id;
-        this.name = name;
-        this.email = email;
-    }
-
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
-
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
-}
+@Schema(description = "Response body representing an example")
+public record ExampleResponse(
+        @Schema(description = "Unique identifier", example = "1") Long id,
+        @Schema(description = "Name of the example", example = "Alice") String name,
+        @Schema(description = "Email address", example = "alice@example.com") String email,
+        @Schema(description = "When the record was created") Instant createdAt,
+        @Schema(description = "When the record was last updated") Instant updatedAt
+) {}

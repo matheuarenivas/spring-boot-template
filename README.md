@@ -1,34 +1,38 @@
 # Spring Boot REST API Template
 
-A clean, opinionated starter template for building REST APIs with Spring Boot and JdbcTemplate.
+A clean, opinionated starter template for building REST APIs with Spring Boot and JdbcTemplate. Clone it, rename the package, and start building.
+
+## Tech Stack
+
+- **Java 21** + **Spring Boot 3.4**
+- **JdbcTemplate** for data access (no JPA/Hibernate)
+- **HikariCP** connection pool (auto-configured)
+- **PostgreSQL** for production, **H2** in-memory for local dev
+- **Flyway** for database migrations
+- **Spring Security** with OAuth2/JWT (OIDC)
+- **Jakarta Validation** for request validation
+- **SpringDoc OpenAPI** for Swagger UI
+- **Testcontainers** for integration tests
+- **Docker** + **Docker Compose** for containerized deployment
+- **GitHub Actions** CI pipeline
 
 ## Project Structure
 
 ```
 src/main/java/com/template/api/
-├── Application.java              # Entry point
-├── config/                       # CORS, web config, etc.
-├── controller/                   # REST endpoints (HTTP layer)
-├── service/                      # Business logic
+├── Application.java              # Entry point + OpenAPI config
+├── config/                       # Security, CORS, request logging + correlation ID
+├── controller/                   # Versioned REST endpoints (/api/v1/...)
+├── service/                      # Business logic with @Transactional
 ├── repository/                   # Data access (JdbcTemplate)
-├── model/                        # Internal domain objects (POJOs)
+├── model/                        # Internal domain objects (POJOs with audit fields)
 ├── dto/
-│   ├── request/                  # Incoming request bodies
-│   └── response/                 # Outgoing response bodies
-├── query/                        # SQL query constants
+│   ├── request/                  # Incoming request bodies (Java records)
+│   └── response/                 # Outgoing response bodies (Java records)
+├── query/                        # SQL query constants (injection-safe)
 ├── mapper/                       # RowMappers + DTO converters
-├── exception/                    # Custom exceptions + global handler
-└── util/                         # Shared helpers
+└── exception/                    # Custom exceptions + global handler
 ```
-
-## Tech Stack
-
-- **Java 21** + **Spring Boot 3.3**
-- **JdbcTemplate** for data access (no JPA/Hibernate)
-- **HikariCP** connection pool (auto-configured)
-- **H2** in-memory DB for local dev
-- **PostgreSQL** driver included for production
-- **Jakarta Validation** for request validation
 
 ## Quick Start
 
@@ -37,55 +41,194 @@ src/main/java/com/template/api/
 git clone https://github.com/YOUR_USERNAME/spring-boot-api-template.git my-new-api
 cd my-new-api
 
-# Run with H2 (no external DB needed)
-./mvnw spring-boot:run
+# Run locally with H2 (no external DB needed)
+mvn spring-boot:run
 
-# Test endpoints
-curl http://localhost:8080/api/examples
-curl http://localhost:8080/api/examples/1
+# Or use Make
+make run
+```
 
-# View H2 console
-# Open http://localhost:8080/h2-console
-# JDBC URL: jdbc:h2:mem:devdb | User: sa | Password: (blank)
+The API starts at `http://localhost:8080`. Endpoints require a valid JWT token — see [Authentication](#authentication) below.
+
+### Useful URLs (Local Dev)
+
+| URL | Description |
+|-----|-------------|
+| `http://localhost:8080/swagger-ui.html` | Swagger UI |
+| `http://localhost:8080/api-docs` | OpenAPI JSON |
+| `http://localhost:8080/h2-console` | H2 database console |
+| `http://localhost:8080/actuator/health` | Health check |
+
+> H2 console credentials: JDBC URL `jdbc:h2:mem:devdb`, User `sa`, no password.
+
+## API Endpoints
+
+All endpoints are versioned under `/api/v1/`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/examples` | Paginated list (query params: `page`, `size`, `sortBy`, `direction`) |
+| `GET` | `/api/v1/examples/{id}` | Get by ID |
+| `POST` | `/api/v1/examples` | Create new |
+| `PUT` | `/api/v1/examples/{id}` | Full update (all fields required) |
+| `PATCH` | `/api/v1/examples/{id}` | Partial update (only non-null fields applied) |
+| `DELETE` | `/api/v1/examples/{id}` | Soft delete (sets `active=false`, record preserved) |
+
+### Response Format
+
+**Success** — returns the resource directly:
+```json
+{
+  "id": 1,
+  "name": "Alice",
+  "email": "alice@example.com",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T10:30:00Z"
+}
+```
+
+**Error** — typed `ErrorResponse` with correlation ID:
+```json
+{
+  "timestamp": "2024-01-15T10:30:00Z",
+  "status": 404,
+  "error": "Not Found",
+  "message": "Example with id 42 not found",
+  "requestId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+### Request Correlation
+
+Every request gets an `X-Request-Id` header (generated or forwarded from the caller). This ID appears in:
+- Response headers
+- Log output
+- Error response bodies
+
+Use it to trace requests across services.
+
+## Authentication
+
+The template uses **OAuth2 Resource Server** with JWT validation. All `/api/**` endpoints require a valid Bearer token.
+
+Configure your OIDC provider in `application.properties`:
+
+```properties
+spring.security.oauth2.resourceserver.jwt.issuer-uri=https://accounts.google.com
+```
+
+Public endpoints (no auth required): Swagger UI, OpenAPI docs, actuator, H2 console.
+
+## Running with Docker
+
+```bash
+# Copy and configure environment variables
+cp .env.example .env
+# Edit .env with your values
+
+# Start PostgreSQL + API
+make docker-up
+
+# Stop
+make docker-down
+```
+
+## Running Tests
+
+```bash
+make test           # Unit tests only (no Docker needed)
+make verify         # All tests including integration (requires Docker for Testcontainers)
 ```
 
 ## Customizing for Your Project
 
-1. **Rename the base package**: Replace `com.template.api` with your own (e.g., `com.yourname.projectname`)
+1. **Rename the base package**: `com.template.api` → `com.yourcompany.projectname`
 2. **Update `pom.xml`**: Change `groupId`, `artifactId`, and `description`
-3. **Add your entities**: Copy the Example* files as a starting point for each new entity
-4. **Switch databases**: Update `application-prod.properties` with your real DB credentials
+3. **Set your OIDC provider**: Update the JWT issuer URI in properties
+4. **Configure CORS**: Set `app.cors.allowed-origins` in properties or environment
 
 ## Adding a New Entity
 
-For each new entity (e.g., `Product`), create:
+For each new entity (e.g., `Product`), create these files using the `Example*` files as reference:
 
-1. `model/Product.java` — POJO
-2. `dto/request/CreateProductRequest.java` — request body with validation
-3. `dto/response/ProductResponse.java` — API response shape
-4. `query/ProductQueries.java` — SQL constants
-5. `mapper/ProductRowMapper.java` — ResultSet → POJO
-6. `mapper/ProductMapper.java` — DTO ↔ model conversions
-7. `repository/ProductRepository.java` — data access
-8. `service/ProductService.java` — business logic
-9. `controller/ProductController.java` — REST endpoints
+1. `model/ProductEntity.java` — POJO with audit fields (`createdAt`, `updatedAt`)
+2. `dto/request/CreateProductRequest.java` — record with validation
+3. `dto/request/UpdateProductRequest.java` — record (all fields required)
+4. `dto/request/PatchProductRequest.java` — record (all fields optional)
+5. `dto/response/ProductResponse.java` — record with timestamps
+6. `query/ProductQueries.java` — SQL constants with safe pagination + soft delete
+7. `mapper/ProductRowMapper.java` — `ResultSet` → entity
+8. `mapper/ProductMapper.java` — DTO ↔ entity conversions
+9. `repository/ProductRepository.java` — JdbcTemplate data access
+10. `service/ProductService.java` — business logic with `@Transactional`
+11. `controller/ProductController.java` — REST endpoints under `/api/v1/`
+12. `db/migration/V2__Create_products_table.sql` — Flyway migration
 
-## Running with a Real Database
+## Architecture Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **JdbcTemplate over JPA** | Full SQL control, no magic, easier to debug |
+| **Java records for DTOs** | Immutable, concise, built-in equals/hashCode |
+| **API versioning (`/v1/`)** | Breaking changes won't break existing clients |
+| **Soft delete** | Data is preserved for audit/compliance, can be restored |
+| **Audit timestamps** | Every table tracks `created_at` and `updated_at` |
+| **Typed error responses** | Consistent, documented error contract across all endpoints |
+| **Correlation IDs** | Enables distributed tracing across services |
+| **`@Transactional`** | Prevents partial writes in multi-step operations |
+| **SQL column whitelist** | ORDER BY injection protection without parameterized queries |
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DB_HOST` | Database host | `localhost` |
+| `DB_PORT` | Database port | `5432` |
+| `DB_NAME` | Database name | `templatedb` |
+| `DB_USERNAME` | Database user | — |
+| `DB_PASSWORD` | Database password | — |
+| `OIDC_ISSUER_URI` | JWT issuer URI | `https://accounts.google.com` |
+| `app.cors.allowed-origins` | Allowed CORS origins | `http://localhost:3000,http://localhost:5173` |
+
+See `.env.example` for a full list.
+
+### Profiles
+
+- **`local`** (default): H2 in-memory database, seed data loaded, H2 console enabled, full actuator exposure
+- **`prod`**: PostgreSQL, no seed data, H2 disabled, restricted actuator, connection pool tuning
 
 ```bash
-# Set environment variables
-export DB_USERNAME=myuser
-export DB_PASSWORD=mypassword
+# Local development (default, no flag needed)
+mvn spring-boot:run
 
-# Run with production profile
-./mvnw spring-boot:run -Dspring-boot.run.profiles=prod
+# Production
+mvn spring-boot:run -Dspring-boot.run.profiles=prod
+```
+
+## Make Targets
+
+```
+make run          Start the app locally (H2)
+make test         Run unit tests
+make verify       Run all tests (needs Docker)
+make build        Build JAR without tests
+make docker-build Build Docker image
+make docker-up    Start with Docker Compose
+make docker-down  Stop Docker Compose
+make clean        Remove build artifacts
 ```
 
 ## Request Flow
 
 ```
-HTTP Request → Controller → Service → Repository → JdbcTemplate → Database
-                  ↓             ↓           ↓
-              Validates     Business     SQL from
-              via @Valid    logic        query constants
+HTTP Request
+    → RequestLoggingFilter (assigns X-Request-Id, starts timer)
+    → Spring Security (validates JWT)
+    → Controller (validates @RequestBody)
+    → Service (@Transactional, business rules)
+    → Repository (JdbcTemplate + SQL constants)
+    → Database
+    → Response (with X-Request-Id header)
 ```

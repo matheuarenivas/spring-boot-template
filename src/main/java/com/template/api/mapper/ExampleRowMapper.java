@@ -6,12 +6,8 @@ import org.springframework.stereotype.Component;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 
-/**
- * Maps database rows to ExampleEntity objects.
- * Extracted as a @Component so it can be injected and reused
- * across multiple repositories if needed.
- */
 @Component
 public class ExampleRowMapper implements RowMapper<ExampleEntity> {
 
@@ -22,6 +18,13 @@ public class ExampleRowMapper implements RowMapper<ExampleEntity> {
         entity.setName(rs.getString("name"));
         entity.setEmail(rs.getString("email"));
         entity.setActive(rs.getBoolean("active"));
+
+        Timestamp createdAt = rs.getTimestamp("created_at");
+        if (createdAt != null) entity.setCreatedAt(createdAt.toInstant());
+
+        Timestamp updatedAt = rs.getTimestamp("updated_at");
+        if (updatedAt != null) entity.setUpdatedAt(updatedAt.toInstant());
+
         return entity;
     }
 }
